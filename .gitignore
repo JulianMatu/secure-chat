@@ -1,0 +1,28 @@
+# Virtual Environment
+venv/
+env/
+.env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Database
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Cursor
+.cursorrules
+
+# Environment variables
+.env
+
+# Logs
+*.log 

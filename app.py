@@ -14,10 +14,22 @@ app = Flask(__name__)
 socketio = SocketIO(app)
 db = init_db(app)
 
+# Redirect to login page if unauthenticated
 @app.route('/')
 def index():
     return "Hello, World!"
 
+@app.route('/login')
+def login():
+    return "Login page"
+
+@app.route('/register')
+def register():
+    return "Register page"
+
+@app.route('/chat/<int:session_id>')
+def chat(session_id):
+    return "Chat page"
+
 if __name__ == '__main__':
     app.run(debug=True)
-

@@ -81,25 +81,6 @@ secure_chat/
 └── schema.sql # Database schema
 
 
-### Database Schema
-- Users Table
-  - id (PRIMARY KEY)
-  - username (UNIQUE)
-  - password_hash
-  - public_key
-  - is_online
-  - signature_preference (RSA/DSA)
-
-- ChatSessions Table
-  - id (PRIMARY KEY)
-  - symmetric_key
-  - created_at
-
-- ChatParticipants Table
-  - session_id (FOREIGN KEY)
-  - user_id (FOREIGN KEY)
-  - encrypted_symmetric_key
-
 ### API Endpoints
 - POST /auth/register
 - POST /auth/login

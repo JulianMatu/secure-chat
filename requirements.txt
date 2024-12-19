@@ -1,18 +1,18 @@
 # Flask and extensions
-Flask==3.0.2
-Flask-SocketIO==5.3.6
-Flask-JWT-Extended==4.6.0
+Flask==3.1.0
+Flask-SocketIO==5.4.1
+Flask-JWT-Extended==4.7.1
 Flask-Bcrypt==1.0.1
 
 # Database
 Flask-SQLAlchemy==3.1.1
 
 # WebSocket
-python-socketio==5.11.1
-python-engineio==4.9.0
+python-socketio==5.11.4
+python-engineio==4.11.0
 
 # Cryptography
-pycryptodome==3.20.0
+pycryptodome==3.21.0
 
 # Add eventlet for async support
-eventlet==0.35.2
+eventlet==0.38.2

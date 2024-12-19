@@ -7,11 +7,9 @@ Database setup and operations
 """
 
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, UTC
-import os
+from datetime import datetime
 import click
 
-DB_URI = 'sqlite:///secure-chat.db'
 db = SQLAlchemy()
 
 ## Database Models ##
@@ -26,7 +24,7 @@ class User(db.Model):
     public_key_rsa = db.Column(db.String, nullable=False)
     public_key_dsa = db.Column(db.String, nullable=False)
     is_online = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.now(UTC))
+    created_at = db.Column(db.DateTime, default=datetime.now)
     signature_preference = db.Column(
         db.Enum('RSA', 'DSA', name='signature_preference_enum'),
         default='RSA',
@@ -45,7 +43,9 @@ class ChatSession(db.Model):
     __tablename__ = 'chat_sessions'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    created_at = db.Column(db.DateTime, default=datetime.now(UTC))
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    name = db.Column(db.String, nullable=False)
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     # Relationships
     participants = db.relationship('ChatParticipant', backref='chat_session', lazy=True)
@@ -58,8 +58,8 @@ class ChatSession(db.Model):
 class ChatParticipant(db.Model):
     __tablename__ = 'chat_participants'
 
-    session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), primary_key=True, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True, nullable=False)
     encrypted_symmetric_key = db.Column(db.String, nullable=False)
 
     def __repr__(self):
@@ -74,74 +74,127 @@ class Message(db.Model):
     session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), nullable=False)
     sender_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     content = db.Column(db.Text, nullable=False)  # Encrypted message content
-    created_at = db.Column(db.DateTime, default=datetime.now(UTC))
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     def __repr__(self):
         return f"<Message {self.id} in Session {self.session_id} from User {self.sender_id}>"
 
-# Initialize database including schema
-def init_db(app):
-    # Configure database settings
-    app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        
-    # Initialize SQLAlchemy
-    db = SQLAlchemy(app)
-    db.create_all()
-    click.echo("Database initialized")
-    # Create a test user
-    return db
-
-"""Returns HTML-formatted string containing all database contents"""
+# Returns HTML-formatted string containing all database contents
 def database_to_html(db) -> str:
-    html_parts = []
+    html = "<html><body>"
     
-    # Users section
-    html_parts.append("<h3>Users</h3>")
-    users = User.query.all()
-    if users:
-        html_parts.append("<ul>")
-        for user in users:
-            html_parts.append(
-                f"<li>ID: {user.id}, Username: {user.username}, "
-                f"Online: {user.is_online}</li>"
-            )
-        html_parts.append("</ul>")
-    else:
-        html_parts.append("<p>No users found.</p>")
+    # Users Table
+    html += "<h2>Users</h2><table border='1'><tr><th>ID</th><th>Username</th><th>Is Online</th><th>Created At</th></tr>"
+    for user in User.query.all():
+        html += f"<tr><td>{user.id}</td><td>{user.username}</td><td>{user.is_online}</td><td>{user.created_at}</td></tr>"
+    html += "</table>"
 
-    # Chat Sessions section
-    html_parts.append("<h3>Chat Sessions</h3>")
-    sessions = ChatSession.query.all()
-    if sessions:
-        html_parts.append("<ul>")
-        for session in sessions:
-            html_parts.append(
-                f"<li>Session ID: {session.id}, Created: {session.created_at}"
-                "<ul class='participants'>"
-            )
-            for participant in session.participants:
-                html_parts.append(f"<li>User ID: {participant.user_id}</li>")
-            html_parts.append("</ul></li>")
-        html_parts.append("</ul>")
-    else:
-        html_parts.append("<p>No chat sessions found.</p>")
+    # Chat Sessions Table
+    html += "<h2>Chat Sessions</h2><table border='1'><tr><th>ID</th><th>Name</th><th>Owner ID</th><th>Created At</th></tr>"
+    for session in ChatSession.query.all():
+        html += f"<tr><td>{session.id}</td><td>{session.name}</td><td>{session.owner_id}</td><td>{session.created_at}</td></tr>"
+    html += "</table>"
 
-    # Messages section
-    html_parts.append("<h3>Messages</h3>")
-    messages = Message.query.all()
-    if messages:
-        html_parts.append("<ul class='messages'>")
-        for message in messages:
-            html_parts.append(
-                f"<li>Message ID: {message.id}<br>"
-                f"Session: {message.session_id}<br>"
-                f"From User: {message.sender_id}<br>"
-                f"Time: {message.created_at}<br>"
-                f"Content: {message.content}</li>"
-            )
-        html_parts.append("</ul>")
-    else:
-        html_parts.append("<p>No messages found.</p>")
+    # Chat Participants Table
+    html += "<h2>Chat Participants</h2><table border='1'><tr><th>Session ID</th><th>User ID</th><th>Encrypted Symmetric Key</th></tr>"
+    for participant in ChatParticipant.query.all():
+        html += f"<tr><td>{participant.session_id}</td><td>{participant.user_id}</td><td>{participant.encrypted_symmetric_key}</td></tr>"
+    html += "</table>"
 
-    return "\n".join(html_parts)
+    # Messages Table
+    html += "<h2>Messages</h2><table border='1'><tr><th>ID</th><th>Session ID</th><th>Sender ID</th><th>Content</th><th>Created At</th></tr>"
+    for message in Message.query.all():
+        html += f"<tr><td>{message.id}</td><td>{message.session_id}</td><td>{message.sender_id}</td><td>{message.content}</td><td>{message.created_at}</td></tr>"
+    html += "</table>"
+
+    html += "</body></html>"
+    return html
+
+# Helper function for creating a new account in the database
+def db_create_account(username: str, password_hash: str, \
+                      public_key_rsa: str, public_key_dsa: str) -> bool:
+    if db_check_account(username) is not None:
+        print("Username already exists.")
+        return False
+    user = User(username=username, password_hash=password_hash,\
+                 public_key_rsa=public_key_rsa, public_key_dsa=public_key_dsa)
+    db.session.add(user)
+    db.session.commit()
+    return True
+
+# Takes a username and returns the corresponding User object
+def db_check_account(username: str):
+    return User.query.filter_by(username=username).first()
+
+# Get user by ID
+def db_get_user_by_id(user_id: int):
+    return User.query.get(user_id)
+
+# Get all users
+def db_get_all_users():
+    return User.query.all()
+
+# Updates the online status of the given user
+def db_update_online_status(user_id: int, is_online: bool):
+    user = User.query.get(user_id)
+    user.is_online = is_online
+    db.session.commit()
+
+# Creates a new empty chat session
+# Chats must have a owner and a name
+def db_create_chat_session(name: str, owner_id: int) -> ChatSession:
+    session = ChatSession(name=name, owner_id=owner_id)
+    db.session.add(session)
+    db.session.commit()
+    return session
+
+# Returns the chat session with the given ID
+def db_get_chat_session(session_id: int) -> ChatSession:
+    return ChatSession.query.get(session_id)
+
+# Adds a user to a chat session
+def db_add_chat_participant(session_id: int, user_id: int, encrypted_symmetric_key: str):
+    if ChatParticipant.query.filter_by(session_id=session_id, user_id=user_id).first() is not None:
+        return None
+    participant = ChatParticipant(session_id=session_id, user_id=user_id, encrypted_symmetric_key=encrypted_symmetric_key)
+    db.session.add(participant)
+    db.session.commit()
+    return participant
+
+# Removes a user from a chat session
+def db_remove_chat_participant(session_id: int, user_id: int):
+    participant = ChatParticipant.query.filter_by(session_id=session_id, user_id=user_id).first()
+    if participant is None:
+        return None
+    db.session.delete(participant)
+    db.session.commit()
+    return participant
+
+# Returns all User objects that are participants in a given chat session
+def db_get_chat_session_users(session_id: int) -> list:
+    participants = ChatParticipant.query.filter_by(session_id=session_id).all()
+    users = []
+    for participant in participants:
+        users.append(db_get_user_by_id(participant.user_id))
+    return users
+
+# Creates a new message in the given chat session
+def db_create_message(session_id: int, sender_id: int, content: str) -> Message:
+    message = Message(session_id=session_id, sender_id=sender_id, content=content)
+    db.session.add(message)
+    db.session.commit()
+    return message
+
+# Returns all messages in the given chat session, sorted by creation time
+def db_get_messages(session_id: int) -> list:
+    messages = Message.query.filter_by(session_id=session_id).order_by(Message.created_at).all()
+    click.echo(f'Messages for session {session_id}: {messages}')
+    return messages
+
+# Returns all chat sessions the given user is a part of
+def db_get_user_chat_sessions(user_id: int) -> list:
+    participants = ChatParticipant.query.filter_by(user_id=user_id).all()
+    sessions = []
+    for participant in participants:
+        sessions.append(db_get_chat_session(participant.session_id))
+    return sessions

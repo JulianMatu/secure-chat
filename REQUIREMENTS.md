@@ -19,7 +19,7 @@
 * Single chat session support is sufficient.
 * Must provide both confidentiality and digital signatures.
 * Must support both RSA and DSA digital signature schemes.
-* Users can switch between RSA and DSA digital signature schemes.
+* Users must use both signatures
 * Must follow best practices for Web Security.
 
 ## System Architecture
@@ -64,22 +64,6 @@
      - Decrypted AES session keys
    - AES session keys encrypted with recipient's RSA public key
    - Each recipient gets their own encrypted copy of AES key
-
-### Minimal File Structure
-secure_chat/
-├── app.py # Main Flask application
-├── database.py # SQLite database setup
-├── crypto.py # Encryption/signature utilities
-├── static/
-│ ├── js/
-│ │ └── chat.js # Frontend WebSocket handling
-│ └── css/
-│ └── style.css # Basic styling
-├── templates/
-│ ├── login.html # Login page
-│ └── chat.html # Main chat interface
-└── schema.sql # Database schema
-
 
 ### API Endpoints
 - POST /auth/register

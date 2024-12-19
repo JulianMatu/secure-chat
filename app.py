@@ -78,6 +78,7 @@ def chat():
 
 ## Web Socket Event Handlers ##
 
+# When a user connects, update their online status
 @socketio.on('connect')
 @login_required_socketio
 def handle_connect():
@@ -87,6 +88,7 @@ def handle_connect():
     else:
         db_update_online_status(user_id, True)
 
+# When a user disconnects, update their online status
 @socketio.on('disconnect')
 @login_required_socketio
 def handle_disconnect():
@@ -96,6 +98,7 @@ def handle_disconnect():
     else:
         db_update_online_status(user_id, False)
 
+# Add a user to a chat room
 @socketio.on('add_user_to_chat')
 @login_required_socketio
 def handle_add_user_to_chat(data):
@@ -108,6 +111,7 @@ def handle_add_user_to_chat(data):
     db_add_chat_participant(room_id, user_id, encrypted_symmetric_key="")
     emit('requery_room', room=room_id)
 
+# Remove a user from a chat room
 @socketio.on('remove_user_from_chat')
 @login_required_socketio
 def handle_remove_user_from_chat(data):
@@ -116,6 +120,7 @@ def handle_remove_user_from_chat(data):
     if db_remove_chat_participant(room_id, user_id):
         emit('requery_room', room=room_id)
 
+# Send a message to a chat room
 @socketio.on('send_message_to_room')
 @login_required_socketio
 def handle_send_message_to_room(data):
@@ -125,6 +130,7 @@ def handle_send_message_to_room(data):
     db_create_message(room_id, user_id, message)
     emit('requery_room', room=room_id)
 
+# Create a new chat room and add the owner as a participant
 @socketio.on('create_chat_room')
 @login_required_socketio
 def handle_create_chat_room(data):
@@ -138,7 +144,6 @@ def handle_create_chat_room(data):
     emit('chat_created', {"room_id": chat_session.id})
 
 # Join a chat room
-# Message is sent to all users in the room
 @socketio.on('join_room')
 @login_required_socketio
 def handle_join_room(data):
@@ -147,7 +152,6 @@ def handle_join_room(data):
     emit('requery_room', room=room_id)
 
 # Leave a chat room
-# Message is sent to all users in the room
 @socketio.on('leave_room')
 @login_required_socketio
 def handle_leave_room(data):
@@ -179,6 +183,7 @@ def handle_query_user_chat_rooms():
         "chat_rooms": [{"id": room.id, "name": room.name} for room in rooms],
     })
 
+# Allows any user to query their own ID
 @socketio.on('query_user_id')
 @login_required_socketio
 def handle_query_user_id():
@@ -186,6 +191,7 @@ def handle_query_user_id():
         "user_id": session['user_id'],
     })
 
+# Allows any user to query another user's ID by username, even if they are not in the same chat room
 @socketio.on('query_user_by_username')
 @login_required_socketio
 def handle_query_user_by_username(data):

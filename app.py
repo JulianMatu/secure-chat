@@ -11,10 +11,15 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 from functools import wraps
 from database import *
 from crypto import *
+from dotenv import load_dotenv
 import os
 import sys
 import click
+import base64
 
+load_dotenv()
+# Master key stored in b64 in .env and decoded here
+MASTER_KEY = base64.b64decode(os.getenv('MASTER_KEY'))
 CHAT_ROOM_LIMIT = 5
 
 app = Flask(__name__)
@@ -127,7 +132,11 @@ def handle_send_message_to_room(data):
     room_id = data['room_id']
     user_id = data['user_id']
     message = data['message']
-    db_create_message(room_id, user_id, message)
+    # Encrypt message with chat room's symmetric key
+    key = db_get_chat_session_encrypted_symmetric_key(room_id)
+    key_dec = decrypt_AES(key, MASTER_KEY)
+    enc_message = encrypt_AES(message.encode(), key_dec)
+    db_create_message(room_id, user_id, enc_message)
     emit('requery_room', room=room_id)
 
 # Create a new chat room and add the owner as a participant
@@ -137,10 +146,9 @@ def handle_create_chat_room(data):
     rooms = db_get_user_chat_sessions(session['user_id'])
     if len(rooms) >= CHAT_ROOM_LIMIT:
         return
-    # Create chat session and add owner as participant
-    # Symmetric key is blank for now
-    chat_session = db_create_chat_session(name=data['chat_name'], owner_id=session['user_id'])
-    db_add_chat_participant(session_id=chat_session.id, user_id=session['user_id'], encrypted_symmetric_key="")
+    enc_key = encrypt_AES(generate_symmetric_key(), MASTER_KEY)
+    chat_session = db_create_chat_session(name=data['chat_name'], owner_id=session['user_id'], encrypted_symmetric_key=enc_key)
+    db_add_chat_participant(session_id=chat_session.id, user_id=session['user_id'])
     emit('chat_created', {"room_id": chat_session.id})
 
 # Join a chat room
@@ -213,13 +221,13 @@ def handle_query_user_by_username(data):
 def register_api():
     username = request.form['username']
     password = request.form['password']
-    rsakey = 0#request.form['rsakey']
-    dsakey = 0#request.form['dsakey']
+    rsakey = ""
+    dsakey = ""
     
     # Check if username already exists
     user = db_check_account(username)
     if user is not None:
-        return redirect(url_for('register'))
+        return "Username already exists", 401
     
     # Hash password
     hashed_password = hash_password(password)
@@ -227,22 +235,24 @@ def register_api():
     db_create_account(username=username, password_hash=hashed_password,\
                        public_key_rsa=rsakey, public_key_dsa=dsakey)
     
-    return redirect(url_for('login'))
+    return "Registration successful", 200
 
 
 @app.route('/api/login', methods=['POST'])
 def login_api():
     username = request.form['username']
     password = request.form['password']
+    rsakey = request.form['rsaPublicKey']
+    dsakey = request.form['dsaPublicKey']
     
     # Grab user from database
     user = db_check_account(username)
     if user and check_password(password, user.password_hash):
         session['user_id'] = user.id
-        db_update_online_status(user.id, True) # Set user online when logged in
-        return redirect(url_for('chat'))
+        db_update_public_key(user.id, rsakey, dsakey)
+        return "Login successful", 200
     else:
-        return redirect(url_for('login'))
+        return "Invalid credentials", 401
     
 @app.route('/api/logout', methods=['POST'])
 def logout_api():
@@ -258,4 +268,8 @@ if __name__ == '__main__':
         return database_to_html(db)
 
 if __name__ == '__main__':
+    if False:
+        with app.app_context():
+            db.drop_all()
+        click.echo("Dropped all tables")
     socketio.run(app, debug=True)

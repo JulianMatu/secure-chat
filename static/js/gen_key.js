@@ -1,4 +1,5 @@
 // Purpose: Generate RSA and DSA key pairs using SubtleCrypto's generateKey method
+// ECDSA is like DSA but with elliptic curves
 // Documentation: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/generateKey
 
 // Generate RSA key pair and return obj with public and private keys
@@ -32,10 +33,8 @@ async function generateRSAKeyPair() {
 async function generateDSAKeyPair() {
     const keyPair = await window.crypto.subtle.generateKey(
         {
-            name: "DSA",
-            modulusLength: 2048,
-            hash: "SHA-256",
-            divisorLength: 256
+            name: "ECDSA",
+            namedCurve: "P-384"
         },
         true,
         ["sign", "verify"]

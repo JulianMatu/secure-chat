@@ -46,6 +46,7 @@ class ChatSession(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
     name = db.Column(db.String, nullable=False)
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    encrypted_symmetric_key = db.Column(db.String, nullable=False) # Encrypted with the server's Master key
 
     # Relationships
     participants = db.relationship('ChatParticipant', backref='chat_session', lazy=True)
@@ -60,7 +61,6 @@ class ChatParticipant(db.Model):
 
     session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), primary_key=True, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True, nullable=False)
-    encrypted_symmetric_key = db.Column(db.String, nullable=False)
 
     def __repr__(self):
         return f"<ChatParticipant User {self.user_id} in Session {self.session_id}>"
@@ -82,7 +82,7 @@ class Message(db.Model):
 # Returns HTML-formatted string containing all database contents
 def database_to_html(db) -> str:
     html = "<html><body>"
-    
+
     # Users Table
     html += "<h2>Users</h2><table border='1'><tr><th>ID</th><th>Username</th><th>Is Online</th><th>Created At</th></tr>"
     for user in User.query.all():
@@ -92,13 +92,13 @@ def database_to_html(db) -> str:
     # Chat Sessions Table
     html += "<h2>Chat Sessions</h2><table border='1'><tr><th>ID</th><th>Name</th><th>Owner ID</th><th>Created At</th></tr>"
     for session in ChatSession.query.all():
-        html += f"<tr><td>{session.id}</td><td>{session.name}</td><td>{session.owner_id}</td><td>{session.created_at}</td></tr>"
+        html += f"<tr><td>{session.id}</td><td>{session.name}</td><td>{session.owner_id}</td><td>{session.created_at}</td><td>{session.encrypted_symmetric_key}</td></tr>"
     html += "</table>"
 
     # Chat Participants Table
-    html += "<h2>Chat Participants</h2><table border='1'><tr><th>Session ID</th><th>User ID</th><th>Encrypted Symmetric Key</th></tr>"
+    html += "<h2>Chat Participants</h2><table border='1'><tr><th>Session ID</th><th>User ID</th></tr>"
     for participant in ChatParticipant.query.all():
-        html += f"<tr><td>{participant.session_id}</td><td>{participant.user_id}</td><td>{participant.encrypted_symmetric_key}</td></tr>"
+        html += f"<tr><td>{participant.session_id}</td><td>{participant.user_id}</td></tr>"
     html += "</table>"
 
     # Messages Table
@@ -140,10 +140,17 @@ def db_update_online_status(user_id: int, is_online: bool):
     user.is_online = is_online
     db.session.commit()
 
+# Update user's public key
+def db_update_public_key(user_id: int, public_key_rsa: str, public_key_dsa: str):
+    user = db_get_user_by_id(user_id)
+    user.public_key_rsa = public_key_rsa
+    user.public_key_dsa = public_key_dsa
+    db.session.commit()
+
 # Creates a new empty chat session
 # Chats must have a owner and a name
-def db_create_chat_session(name: str, owner_id: int) -> ChatSession:
-    session = ChatSession(name=name, owner_id=owner_id)
+def db_create_chat_session(name: str, owner_id: int, encrypted_symmetric_key: str) -> ChatSession:
+    session = ChatSession(name=name, owner_id=owner_id, encrypted_symmetric_key=encrypted_symmetric_key)
     db.session.add(session)
     db.session.commit()
     return session
@@ -152,11 +159,14 @@ def db_create_chat_session(name: str, owner_id: int) -> ChatSession:
 def db_get_chat_session(session_id: int) -> ChatSession:
     return ChatSession.query.get(session_id)
 
+def db_get_chat_session_encrypted_symmetric_key(session_id: int) -> str:
+    return db_get_chat_session(session_id).encrypted_symmetric_key
+
 # Adds a user to a chat session
-def db_add_chat_participant(session_id: int, user_id: int, encrypted_symmetric_key: str):
+def db_add_chat_participant(session_id: int, user_id: int):
     if ChatParticipant.query.filter_by(session_id=session_id, user_id=user_id).first() is not None:
         return None
-    participant = ChatParticipant(session_id=session_id, user_id=user_id, encrypted_symmetric_key=encrypted_symmetric_key)
+    participant = ChatParticipant(session_id=session_id, user_id=user_id)
     db.session.add(participant)
     db.session.commit()
     return participant

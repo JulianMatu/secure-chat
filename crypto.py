@@ -15,12 +15,12 @@ from Crypto.Random import get_random_bytes
 import base64
 
 # Hash Password
-def hash_password(password: str) -> str:
-    return hashpw(password.encode(), gensalt()).decode()
+def hash_password(password: str, pepper: bytes) -> str:
+    return hashpw(password.encode() + pepper, gensalt()).decode()
 
 # Check Password
-def check_password(password: str, password_hash: str) -> bool:
-    return checkpw(password.encode(), password_hash.encode())
+def check_password(password: str, pepper: bytes, password_hash: str) -> bool:
+    return checkpw(password.encode() + pepper, password_hash.encode())
 
 # Generate a symmetric key for 256-bit AES encryption
 def generate_symmetric_key() -> bytes:

@@ -17,30 +17,35 @@ import sys
 import click
 import base64
 
+# Load environment variables
 load_dotenv()
-# Master key stored in b64 in .env and decoded here
 MASTER_KEY = base64.b64decode(os.getenv('MASTER_KEY'))
-CHAT_ROOM_LIMIT = 50
+PEPPER = base64.b64decode(os.getenv('PEPPER'))
+CHAT_ROOM_LIMIT = 5
+ssl_cert_path = os.getenv('SSL_CERT_PATH')
+ssl_key_path = os.getenv('SSL_KEY_PATH')
+PORT = os.getenv('PORT')
+HOST = os.getenv('HOST')
+DEBUG = (os.getenv('DEBUG') == 'True')
 
+## Configuration ##
 app = Flask(__name__)
 socketio = SocketIO(app)
 app.secret_key = os.urandom(24) # Required for session management
 
-## Configuration ##
 WIN = sys.platform.startswith('win')
 prefix = 'sqlite:///' if WIN else 'sqlite:////'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = prefix + 'securechat.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Initialize extensions
 db.init_app(app)
 
 # Create database tables
 with app.app_context():
     db.create_all()
 
-## Authentication ##
+## Authentication Decorators for Flask and SocketIO ##
 def login_required_flask(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -75,15 +80,14 @@ def login():
 def register():
     return render_template('register.html')
 
-# Choose which chat session to join or create a new one
 @app.route('/chat')
 @login_required_flask
 def chat():
     return render_template('chat.html')
 
 ## Web Socket Event Handlers ##
-
 # When a user connects, update their online status
+# And tell clients to requery the chat rooms they are in
 @socketio.on('connect')
 @login_required_socketio
 def handle_connect():
@@ -92,8 +96,11 @@ def handle_connect():
         return
     else:
         db_update_online_status(user_id, True)
+        for room in db_get_user_chat_sessions(session['user_id']):
+            emit('requery_room', room=room.id)
 
 # When a user disconnects, update their online status
+# And tell clients to requery the chat rooms they are in
 @socketio.on('disconnect')
 @login_required_socketio
 def handle_disconnect():
@@ -106,24 +113,27 @@ def handle_disconnect():
             emit('requery_room', room=room.id)
 
 # Add a user to a chat room
+# Only the owner of the chat room can add users
 @socketio.on('add_user_to_chat')
 @login_required_socketio
 def handle_add_user_to_chat(data):
     room_id = data['room_id']
     user_id = data['user_id']
     chat_session = db_get_chat_session(room_id)
-    # Check if user is the owner of the chat session
     if chat_session.owner_id != session['user_id']:
         return
     db_add_chat_participant(room_id, user_id)
     emit('requery_room', room=room_id)
 
 # Remove a user from a chat room
+# Any user can remove themselves from a chat room
 @socketio.on('remove_user_from_chat')
 @login_required_socketio
 def handle_remove_user_from_chat(data):
     room_id = data['room_id']
     user_id = data['user_id']
+    if user_id != session['user_id'] and user_id != db_get_chat_session(room_id).owner_id:
+        return
     if db_remove_chat_participant(room_id, user_id):
         emit('requery_room', room=room_id)
 
@@ -182,7 +192,6 @@ def handle_query_chat_room(data):
     user = db_get_user_by_id(session['user_id'])
     unencrypted_session_key = decrypt_AES(encrypted_session_key, MASTER_KEY)
     user_encrypted_key = encrypt_key_RSA(base64.b64decode(unencrypted_session_key), user.public_key_rsa)
-    #click.echo(f"Session Key: {unencrypted_session_key.decode()}, User encrypted key: {user_encrypted_key}, User's public key: {user.public_key_rsa}")
     payload= {
         "room_id": room_id, 
         "room_name": db_get_chat_session(room_id).name,
@@ -226,7 +235,6 @@ def handle_query_user_by_username(data):
             "username": data['username'],
         })
                 
-
 ## API Routes ##
 @app.route('/api/register', methods=['POST'])
 def register_api():
@@ -241,13 +249,12 @@ def register_api():
         return "Username already exists", 401
     
     # Hash password
-    hashed_password = hash_password(password)
+    hashed_password = hash_password(password, PEPPER)
 
     db_create_account(username=username, password_hash=hashed_password,\
                        public_key_rsa=rsakey, public_key_dsa=dsakey)
     
     return "Registration successful", 200
-
 
 @app.route('/api/login', methods=['POST'])
 def login_api():
@@ -258,7 +265,7 @@ def login_api():
     
     # Grab user from database
     user = db_check_account(username)
-    if user and check_password(password, user.password_hash):
+    if user and check_password(password, PEPPER, user.password_hash):
         session['user_id'] = user.id
         db_update_public_key(user.id, rsakey, dsakey)
         return "Login successful", 200
@@ -274,17 +281,17 @@ def logout_api():
     return "Logout Successful", 200
 
 ## Debug Routes ##
-if __name__ == '__main__':
+if DEBUG:
     @app.route('/database')
     def database():
         return database_to_html(db)
 
 if __name__ == '__main__':
-    if False:
-        with app.app_context():
-            db.drop_all()
-        click.echo("Dropped all tables")
-    # Clear the console when the application starts
     os.system('cls' if os.name == 'nt' else 'clear')
-
-    socketio.run(app, debug=True)
+    ssl_context = (ssl_cert_path, ssl_key_path) if ssl_cert_path and ssl_key_path else None
+    click.echo(f"Server started. Connect to {HOST}:{PORT}")
+    if ssl_context:
+        socketio.run(app, host=HOST, port=PORT, debug=DEBUG, ssl_context=ssl_context)
+    else:
+        click.echo("SSL certificate and key not found. Running in insecure (HTTP) mode.")
+        socketio.run(app, host=HOST, port=PORT, debug=DEBUG)

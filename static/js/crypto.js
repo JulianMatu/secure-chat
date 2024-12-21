@@ -111,24 +111,43 @@ async function decryptSessionKey(encrypted_session_key, rsaPrivateKey) {
 }
 
 // Decrypt a message with AES
-async function decryptMessage(encrypted_message, session_key) {
+async function decryptMessage(encryptedMessageBase64, session_key) {
     try {
-        const ciphertext = base64ToArrayBuffer(encrypted_message);
-        const nonce = ciphertext.slice(0, 16);
-        const tag = ciphertext.slice(16, 32);
-        const encryptedContent = ciphertext.slice(32);
+        if (!session_key) {
+            console.error('Session key not found');
+            throw new Error('Session key not found');
+        }
 
-        const decryptedContent = await window.crypto.subtle.decrypt(
-            {
-                name: "AES-GCM",
-                iv: nonce,
-                tagLength: 128
-            },
+        // Decode the Base64-encoded encrypted message into a Uint8Array
+        const encryptedMessage = base64ToArrayBuffer(encryptedMessageBase64);
+        const iv = encryptedMessage.slice(0, 12); // Extract the IV (first 12 bytes)
+        const ciphertext = encryptedMessage.slice(12); // Extract the ciphertext (remaining bytes)
+
+        // Import the AES key
+        const key = await window.crypto.subtle.importKey(
+            "raw",
             session_key,
-            encryptedContent
+            {
+                name: "AES-GCM"
+            },
+            false,
+            ["decrypt"]
         );
 
-        return new TextDecoder().decode(decryptedContent);
+        // Decrypt the ciphertext
+        const decryptedArrayBuffer = await window.crypto.subtle.decrypt(
+            {
+                name: "AES-GCM",
+                iv: iv,
+                tagLength: 128
+            },
+            key,
+            ciphertext
+        );
+
+        // Convert the decrypted data back to a string
+        const decryptedMessage = new TextDecoder().decode(decryptedArrayBuffer);
+        return decryptedMessage;
     } catch (error) {
         console.error('Error decrypting message:', error);
         throw error;

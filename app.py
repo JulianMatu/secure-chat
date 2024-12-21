@@ -113,7 +113,7 @@ def handle_add_user_to_chat(data):
     # Check if user is the owner of the chat session
     if chat_session.owner_id != session['user_id']:
         return
-    db_add_chat_participant(room_id, user_id, encrypted_symmetric_key="")
+    db_add_chat_participant(room_id, user_id)
     emit('requery_room', room=room_id)
 
 # Remove a user from a chat room

@@ -88,15 +88,15 @@ def database_to_html(db) -> str:
     html = "<html><body>"
 
     # Users Table
-    html += "<h2>Users</h2><table border='1'><tr><th>ID</th><th>Username</th><th>Is Online</th><th>Created At</th><th>RSA Public Key</th><th>DSA Public Key</th></tr>"
+    html += "<h2>Users</h2><table border='1'><tr><th>ID</th><th>Username</th><th>Is Online</th><th>Created At</th><th>RSA Public Key</th><th>DSA Public Key</th><th>Hashed Password</th></tr>"
     for user in User.query.all():
-        html += f"<tr><td>{user.id}</td><td>{user.username}</td><td>{user.is_online}</td><td>{user.created_at}</td></tr>"
+        html += f"<tr><td>{user.id}</td><td>{user.username}</td><td>{user.is_online}</td><td>{user.created_at}</td><td>{user.public_key_rsa}</td><td>{user.public_key_dsa}</td><td>{user.password_hash}</td></tr>"
     html += "</table>"
 
     # Chat Sessions Table
     html += "<h2>Chat Sessions</h2><table border='1'><tr><th>ID</th><th>Name</th><th>Owner ID</th><th>Created At</th><th>Encrypted Symmetric Key</th></tr>"
     for session in ChatSession.query.all():
-        html += f"<tr><td>{session.id}</td><td>{session.name}</td><td>{session.owner_id}</td><td>{session.created_at}</td></tr>"
+        html += f"<tr><td>{session.id}</td><td>{session.name}</td><td>{session.owner_id}</td><td>{session.created_at}</td><td>{session.encrypted_symmetric_key}</td></tr>"
     html += "</table>"
 
     # Chat Participants Table
@@ -106,9 +106,9 @@ def database_to_html(db) -> str:
     html += "</table>"
 
     # Messages Table
-    html += "<h2>Messages</h2><table border='1'><tr><th>ID</th><th>Session ID</th><th>Sender ID</th><th>Content</th><th>Created At</th></tr>"
+    html += "<h2>Messages</h2><table border='1'><tr><th>ID</th><th>Session ID</th><th>Sender ID</th><th>Encrypted Data</th><th>Created At</th><th>RSA Signature</th><th>DSA Signature</th></tr>"
     for message in Message.query.all():
-        html += f"<tr><td>{message.id}</td><td>{message.session_id}</td><td>{message.sender_id}</td><td>{message.content}</td><td>{message.created_at}</td></tr>"
+        html += f"<tr><td>{message.id}</td><td>{message.session_id}</td><td>{message.sender_id}</td><td>{message.content}</td><td>{message.created_at}</td><td>{message.rsa_signature}</td><td>{message.dsa_signature}</td></tr>"
     html += "</table>"
 
     html += "</body></html>"
@@ -211,3 +211,13 @@ def db_get_user_chat_sessions(user_id: int) -> list:
     for participant in participants:
         sessions.append(db_get_chat_session(participant.session_id))
     return sessions
+
+# Get all chat sessions
+def db_get_all_chat_sessions():
+    return ChatSession.query.all()
+
+# Update chat session key
+def db_update_chat_session_key(session_id: int, encrypted_symmetric_key: str):
+    session = db_get_chat_session(session_id)
+    session.encrypted_symmetric_key = encrypted_symmetric_key
+    db.session.commit()

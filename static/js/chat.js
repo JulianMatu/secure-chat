@@ -96,8 +96,9 @@ document.addEventListener('DOMContentLoaded', () => {
         function addMessage(message, session_key) {
             // Decrypt the message content using the session key
             decryptMessage(message.content, session_key).then(decryptedContent => {
+                const user = participants.find(user => user.id === message.sender_id);
                 // Verify the sender's signature either RSA or DSA
-                verifySignature(signatureType, decryptedContent, message.signatures, {"RSA": rsaPublicKey, "DSA": dsaPublicKey}).then(isValid => {
+                verifySignature(signatureType, decryptedContent, message.signatures, {"RSA": user.rsa_public_key, "DSA": user.dsa_public_key}).then(isValid => {
                     if (!isValid) {
                         console.error('Invalid signature');
                         return;

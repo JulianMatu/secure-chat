@@ -9,7 +9,8 @@ Cryptographic utilities
 from bcrypt import hashpw, gensalt, checkpw
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.Hash import SHA256
-from Crypto.PublicKey import RSA, DSA
+from Crypto.PublicKey import RSA, ECC
+from Crypto.Signature import DSS
 from Crypto.Random import get_random_bytes
 import base64
 
@@ -23,15 +24,16 @@ def check_password(password: str, password_hash: str) -> bool:
 
 # Generate a symmetric key for 256-bit AES encryption
 def generate_symmetric_key() -> bytes:
-    return get_random_bytes(32)
+    return base64.b64encode(get_random_bytes(32))
 
 # Encrypt with AES
-def encrypt_AES(message: bytes, key: bytes) -> str:
+def encrypt_AES(message: bytes, key: bytes) -> bytes:
     cipher = AES.new(key, AES.MODE_GCM)
     ciphertext, tag = cipher.encrypt_and_digest(message)
-    return base64.b64encode(cipher.nonce + tag + ciphertext).decode()
+    return base64.b64encode(cipher.nonce + tag + ciphertext)
 
 # Decrypt with AES
+# In regular bytes format
 def decrypt_AES(ciphertext: str, key: bytes) -> bytes:
     ciphertext = base64.b64decode(ciphertext)
     nonce = ciphertext[:16]
@@ -41,13 +43,14 @@ def decrypt_AES(ciphertext: str, key: bytes) -> bytes:
     return cipher.decrypt_and_verify(ciphertext, tag)
 
 # Encrypt Key with RSA
-def encrypt_key_RSA(key: bytes, public_key: bytes) -> str:
-    public_key = RSA.import_key(public_key)
-    cipher = PKCS1_OAEP.new(public_key)
+# Outputs a base64 encoded string
+def encrypt_key_RSA(key: bytes, public_key: str) -> str:
+    public_key = RSA.import_key(base64.b64decode(public_key))
+    cipher = PKCS1_OAEP.new(public_key, hashAlgo=SHA256)
     return base64.b64encode(cipher.encrypt(key)).decode()
 
-# Encrypt Key with DSA
-def encrypt_key_DSA(key: bytes, public_key: bytes) -> str:
-    public_key = DSA.import_key(public_key)
-    cipher = PKCS1_OAEP.new(public_key)
-    return cipher.encrypt(key).decode()
+# Decrypt Key with RSA
+def decrypt_key_RSA(key: str, private_key: str) -> bytes:
+    private_key = RSA.import_key(base64.b64decode(private_key))
+    cipher = PKCS1_OAEP.new(private_key, hashAlgo=SHA256)
+    return cipher.decrypt(base64.b64decode(key))

@@ -47,6 +47,7 @@
             padding: 10px;
             border: 1px solid #ccc;
             border-top: none;
+            resize: none;
         }
         .add-user {
             margin-top: auto;
@@ -77,7 +78,7 @@
             <div class="chat-messages" id="message-list">
                 <!-- Messages will be displayed here -->
             </div>
-            <div>
+            <div class="chat-input">
                 <textarea id="chat-input" placeholder="Type your message here..."></textarea>
             </div>
         </div>
@@ -94,5 +95,6 @@
 
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <script src="/static/js/chat.js"></script>
+    <script src="/static/js/crypto.js"></script>
 </body>
 </html>

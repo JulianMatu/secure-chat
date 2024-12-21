@@ -1,14 +1,14 @@
 // Create and store RSA and DSA key pairs in localStorage
 
-document.addEventListener('DOMContentLoaded', () => {
-    const dsaKeyPair = generateDSAKeyPair();
-    const rsaKeyPair = generateRSAKeyPair();
+document.addEventListener('DOMContentLoaded', async () => {
+    const dsaKeyPair = await generateDSAKeyPair();
+    const rsaKeyPair = await generateRSAKeyPair();
 
     localStorage.setItem('dsaPrivateKey', dsaKeyPair.privateKey);
     localStorage.setItem('dsaPublicKey', dsaKeyPair.publicKey);
 
     localStorage.setItem('rsaPrivateKey', rsaKeyPair.privateKey);
-    localStorage.setItem('rsaPublicKey', rsaKeyPair.publicKey);
+    localStorage.setItem('rsaPublicKey', rsaKeyPair.publicKey);  
 
     const form = document.getElementById('login-form');
     form.addEventListener('submit', (e) => {

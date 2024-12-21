@@ -9,12 +9,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentRoomHeader = document.getElementById('current-room');
     const usernameInput = document.getElementById('username-input');
 
+    // Private keys
+    const rsaPrivateKey = localStorage.getItem('rsaPrivateKey');
+    const dsaPrivateKey = localStorage.getItem('dsaPrivateKey');
+
     // Global variables
     let current_room = null;
     let current_user_id = null;
     let chat_rooms = []; // List of chat rooms that the user is in
     let messages = []; // List of messages in the current chat room
     let participants = []; // List of participants in the current chat room
+    let session_key = null; // Decrypted session key for the current chat room (AES)
 
     // Run once
     function runOnce() {
@@ -39,10 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.createNewChatSession = function () {
         const room_name = prompt('Enter the name of the new room:');
         socket.emit('create_chat_room', {'chat_name': room_name});
-        let room_id = 0;
-        socket.on('chat_created', data => {
-            socket.emit('query_user_chat_rooms');
-        });
+        console.log("Room: " + room_name + " created");
     }
     
     // Update the chat room list
@@ -85,35 +87,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Update the messages list
     function updateMessagesList(messages) {
-        function addMessage(message) {
-            const li = document.createElement('li');
-            const username = participants.find(user => user.id === message.sender_id).username;
-            li.textContent = `${message.created_at} ${username}: ${message.content}`;
-            messagesList.appendChild(li);
+        function addMessage(message, session_key) {
+            decryptMessage(message.content, session_key).then(decryptedContent => {
+                const li = document.createElement('li');
+                const username = participants.find(user => user.id === message.sender_id).username;
+                li.textContent = `${message.created_at} ${username}: ${decryptedContent}`;
+                messagesList.appendChild(li);
+            });
         }
 
         // Clear the current messages list
         messagesList.innerHTML = '';
 
-        // Add each message to the list
-        messages.forEach(message => addMessage(message));
+        messages.forEach(message => addMessage(message, session_key));
     }
 
-    // Listen for keydown events on the message input
+    // Message input event listener
     messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             const message = messageInput.value;
             e.preventDefault();
             if (current_room && message) {
                 // Emit the message event
-                socket.emit('send_message_to_room', {'user_id': current_user_id, 'message': message, 'room_id': current_room.id});
-                console.log("Message: " + message + " sent to room: " + current_room.name);
-                messageInput.value = '';  // Clear the message input
+                encryptMessage(message, session_key).then(enc_msg => {
+                    socket.emit('send_message_to_room', {'user_id': current_user_id, 'message': enc_msg, 'room_id': current_room.id});
+                    console.log("Message: " + message + " sent to room: " + current_room.name);
+                    console.log("Encrypted message: " + enc_msg);
+                    messageInput.value = '';  // Clear the message input
+                }).catch(error => {
+                    console.error('Error encrypting message:', error);
+                });
             }
         }
     });
 
-    // Listen for keydown events on the username input
+    // Username input event listener
     usernameInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             username = usernameInput.value;
@@ -148,12 +156,19 @@ document.addEventListener('DOMContentLoaded', () => {
         current_room = { 'id': data.room_id, 'name': data.room_name };
         participants = data.participants;
         messages = data.messages;
-        
-        // Update the user list
-        updateUserList(participants);
+        const encrypted_session_key = data.user_encrypted_key;
 
-        // Update the messages list
-        updateMessagesList(messages);
+        decryptSessionKey(encrypted_session_key, rsaPrivateKey).then(decrypted_session_key => {
+            session_key = decrypted_session_key,
+
+            //console.log('chat room query results: ' + current_room.name + ' ' + participants + ' ' + messages + ' ' + encrypted_session_key);
+        
+            // Update the user list
+            updateUserList(participants),
+
+            // Update the messages list
+            updateMessagesList(messages)
+        });
     });
 
     // Any time the state of the chat room changes, requery the room info
@@ -162,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('chat_created', data => {
-        socket.emit('query_user_chat_rooms', {'user_id': current_user_id});
+        socket.emit('query_user_chat_rooms');
     });
 
     socket.on('res_query_user_id', data => {

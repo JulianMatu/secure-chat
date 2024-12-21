@@ -84,13 +84,13 @@ def database_to_html(db) -> str:
     html = "<html><body>"
 
     # Users Table
-    html += "<h2>Users</h2><table border='1'><tr><th>ID</th><th>Username</th><th>Is Online</th><th>Created At</th></tr>"
+    html += "<h2>Users</h2><table border='1'><tr><th>ID</th><th>Username</th><th>Is Online</th><th>Created At</th><th>RSA Public Key</th><th>DSA Public Key</th></tr>"
     for user in User.query.all():
-        html += f"<tr><td>{user.id}</td><td>{user.username}</td><td>{user.is_online}</td><td>{user.created_at}</td></tr>"
+        html += f"<tr><td>{user.id}</td><td>{user.username}</td><td>{user.is_online}</td><td>{user.created_at}</td><td>{user.public_key_rsa}</td><td>{user.public_key_dsa}</td></tr>"
     html += "</table>"
 
     # Chat Sessions Table
-    html += "<h2>Chat Sessions</h2><table border='1'><tr><th>ID</th><th>Name</th><th>Owner ID</th><th>Created At</th></tr>"
+    html += "<h2>Chat Sessions</h2><table border='1'><tr><th>ID</th><th>Name</th><th>Owner ID</th><th>Created At</th><th>Encrypted Symmetric Key</th></tr>"
     for session in ChatSession.query.all():
         html += f"<tr><td>{session.id}</td><td>{session.name}</td><td>{session.owner_id}</td><td>{session.created_at}</td><td>{session.encrypted_symmetric_key}</td></tr>"
     html += "</table>"

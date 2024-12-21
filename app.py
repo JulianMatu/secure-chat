@@ -20,7 +20,7 @@ import base64
 load_dotenv()
 # Master key stored in b64 in .env and decoded here
 MASTER_KEY = base64.b64decode(os.getenv('MASTER_KEY'))
-CHAT_ROOM_LIMIT = 5
+CHAT_ROOM_LIMIT = 50
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -132,11 +132,7 @@ def handle_send_message_to_room(data):
     room_id = data['room_id']
     user_id = data['user_id']
     message = data['message']
-    # Encrypt message with chat room's symmetric key
-    key = db_get_chat_session_encrypted_symmetric_key(room_id)
-    key_dec = decrypt_AES(key, MASTER_KEY)
-    enc_message = encrypt_AES(message.encode(), key_dec)
-    db_create_message(room_id, user_id, enc_message)
+    db_create_message(room_id, user_id, message)
     emit('requery_room', room=room_id)
 
 # Create a new chat room and add the owner as a participant
@@ -145,9 +141,13 @@ def handle_send_message_to_room(data):
 def handle_create_chat_room(data):
     rooms = db_get_user_chat_sessions(session['user_id'])
     if len(rooms) >= CHAT_ROOM_LIMIT:
+        click.echo(f"User {session['user_id']} has reached the chat room limit")
         return
-    enc_key = encrypt_AES(generate_symmetric_key(), MASTER_KEY)
-    chat_session = db_create_chat_session(name=data['chat_name'], owner_id=session['user_id'], encrypted_symmetric_key=enc_key)
+    symm_key = generate_symmetric_key()
+    click.echo(f"Symmetric key: {symm_key.decode()} for chat session {data['chat_name']}")
+    enc_key = encrypt_AES(symm_key, MASTER_KEY)
+    click.echo(f"Encrypted symmetric key: {enc_key.decode()} for chat session {data['chat_name']}")
+    chat_session = db_create_chat_session(name=data['chat_name'], owner_id=session['user_id'], encrypted_symmetric_key=enc_key.decode())
     db_add_chat_participant(session_id=chat_session.id, user_id=session['user_id'])
     emit('chat_created', {"room_id": chat_session.id})
 
@@ -174,13 +174,19 @@ def handle_query_chat_room(data):
     room_id = data['room_id']
     session_users = db_get_chat_session_users(room_id)
     session_messages = db_get_messages(room_id)
-
-    emit('res_query_chat_room', {
+    encrypted_session_key = db_get_chat_session_encrypted_symmetric_key(room_id)
+    user = db_get_user_by_id(session['user_id'])
+    unencrypted_session_key = decrypt_AES(encrypted_session_key, MASTER_KEY)
+    user_encrypted_key = encrypt_key_RSA(base64.b64decode(unencrypted_session_key), user.public_key_rsa)
+    click.echo(f"Session Key: {unencrypted_session_key.decode()}, User encrypted key: {user_encrypted_key}, User's public key: {user.public_key_rsa}")
+    payload= {
         "room_id": room_id, 
         "room_name": db_get_chat_session(room_id).name,
         "participants": [{"id": user.id, "username": user.username, "is_online": user.is_online} for user in session_users] if session_users else [],
         "messages": [{"id": msg.id, "sender_id": msg.sender_id, "created_at": str(msg.created_at), "content": msg.content} for msg in session_messages] if session_messages else [],
-    })
+        "user_encrypted_key": user_encrypted_key,
+    }
+    emit('res_query_chat_room', payload)
 
 # Sends all chat rooms the user is a part of
 @socketio.on('query_user_chat_rooms')

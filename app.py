@@ -1,6 +1,6 @@
 """
 Main Flask application file
-- Initializes Flask app and extensions (SocketIO, JWT, Bcrypt)
+- Initializes Flask app and extensions
 - Registers routes and error handlers
 - Configures WebSocket events
 - Sets up database connection
@@ -102,6 +102,8 @@ def handle_disconnect():
         return
     else:
         db_update_online_status(user_id, False)
+        for room in db_get_user_chat_sessions(session['user_id']):
+            emit('requery_room', room=room.id)
 
 # Add a user to a chat room
 @socketio.on('add_user_to_chat')
@@ -132,7 +134,9 @@ def handle_send_message_to_room(data):
     room_id = data['room_id']
     user_id = data['user_id']
     message = data['message']
-    db_create_message(room_id, user_id, message)
+    rsa_signature = data['rsa_signature']
+    dsa_signature = data['dsa_signature']
+    db_create_message(room_id, user_id, message, rsa_signature, dsa_signature)
     emit('requery_room', room=room_id)
 
 # Create a new chat room and add the owner as a participant
@@ -178,12 +182,13 @@ def handle_query_chat_room(data):
     user = db_get_user_by_id(session['user_id'])
     unencrypted_session_key = decrypt_AES(encrypted_session_key, MASTER_KEY)
     user_encrypted_key = encrypt_key_RSA(base64.b64decode(unencrypted_session_key), user.public_key_rsa)
-    click.echo(f"Session Key: {unencrypted_session_key.decode()}, User encrypted key: {user_encrypted_key}, User's public key: {user.public_key_rsa}")
+    #click.echo(f"Session Key: {unencrypted_session_key.decode()}, User encrypted key: {user_encrypted_key}, User's public key: {user.public_key_rsa}")
     payload= {
         "room_id": room_id, 
         "room_name": db_get_chat_session(room_id).name,
-        "participants": [{"id": user.id, "username": user.username, "is_online": user.is_online} for user in session_users] if session_users else [],
-        "messages": [{"id": msg.id, "sender_id": msg.sender_id, "created_at": str(msg.created_at), "content": msg.content} for msg in session_messages] if session_messages else [],
+        "participants": [{"id": user.id, "username": user.username, "is_online": user.is_online, "rsa_public_key": user.public_key_rsa, "dsa_public_key": user.public_key_dsa} for user in session_users] if session_users else [],
+        "messages": [{"id": msg.id, "sender_id": msg.sender_id, "created_at": str(msg.created_at.strftime('%m-%d %H:%M:%S')),\
+                       "content": msg.content, "signatures": {"RSA": msg.rsa_signature, "DSA": msg.dsa_signature}} for msg in session_messages] if session_messages else [],
         "user_encrypted_key": user_encrypted_key,
     }
     emit('res_query_chat_room', payload)
@@ -263,9 +268,10 @@ def login_api():
 @app.route('/api/logout', methods=['POST'])
 def logout_api():
     if 'user_id' in session:
-        db_update_online_status(session['user_id'], False)
+        for room in db_get_user_chat_sessions(session['user_id']):
+            socketio.emit('requery_room', room=room.id)
         session.clear()
-    return redirect(url_for('login'))
+    return "Logout Successful", 200
 
 ## Debug Routes ##
 if __name__ == '__main__':
@@ -278,4 +284,7 @@ if __name__ == '__main__':
         with app.app_context():
             db.drop_all()
         click.echo("Dropped all tables")
+    # Clear the console when the application starts
+    os.system('cls' if os.name == 'nt' else 'clear')
+
     socketio.run(app, debug=True)

@@ -2,25 +2,25 @@
 
 ## Core Requirements
 
-* Users must be registered with the chat server.
-* Users authenticate with username and password.
-* Server verifies credentials and updates user status to "online".
-* Users can specify multiple users to chat with.
-* Users can check which other users are online.
-* Users can invite online users to ongoing conversations.
-* Server generates and distributes symmetric keys securely.
-* Symmetric keys are encrypted using users' public keys.
-* Users are notified if invited participants are offline.
-* Users decrypt symmetric key with their private key to join chat.
-* All chat messages must be encrypted with the symmetric key.
-* Users can leave conversations at will.
-* User status changes to "offline" upon disconnection.
-* Online status checking must be available.
-* Single chat session support is sufficient.
-* Must provide both confidentiality and digital signatures.
-* Must support both RSA and DSA digital signature schemes.
-* Users must use both signatures
-* Must follow best practices for Web Security.
+* Users must be registered with the chat server. [X]
+* Users authenticate with username and password. [X]
+* Server verifies credentials and updates user status to "online". [X]
+* Users can specify multiple users to chat with. [X]
+* Users can check which other users are online. [X]
+* Users can invite online users to ongoing conversations. [X]
+* Server generates and distributes symmetric keys securely. [X]
+* Symmetric keys are encrypted using users' public keys. [X]
+* Users are notified if invited participants are offline. [X]
+* Users decrypt symmetric key with their private key to join chat. [X]
+* All chat messages must be encrypted with the symmetric key. [X]
+* Users can leave conversations at will. [X]
+* User status changes to "offline" upon disconnection. [X]
+* Online status checking must be available. [X]
+* Single chat session support is sufficient. [X]
+* Must provide both confidentiality and digital signatures. [X]
+* Must support both RSA and DSA digital signature schemes. [X]
+* Users must use both signatures [X]
+* Must follow best practices for Web Security. [X]
 
 ## System Architecture
 

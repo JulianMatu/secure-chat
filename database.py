@@ -1,14 +1,16 @@
 """
-Database setup and operations
-- Initializes SQLite database
-- Provides functions for user management
-- Handles chat session operations
-- Manages online status tracking
-"""
+This module defines the database models and helper functions for a secure chat application using Flask and SQLAlchemy.
 
+Classes:
+    User: Represents a user in the chat application.
+    ChatSession: Represents a chat session.
+    ChatParticipant: Represents the association between users and chat sessions.
+    Message: Represents a message sent within a chat session.
+
+A whole lot of helper functions, Im not going to list them all here.
+"""
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-import click
 
 db = SQLAlchemy()
 
@@ -66,7 +68,7 @@ class ChatParticipant(db.Model):
         return f"<ChatParticipant User {self.user_id} in Session {self.session_id}>"
 
 # Messages Table
-# Content is encrypted with E2E Symmetric Key
+# Content is encrypted with the chat session's symmetric key
 class Message(db.Model):
     __tablename__ = 'messages'
 
@@ -75,6 +77,8 @@ class Message(db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     content = db.Column(db.Text, nullable=False)  # Encrypted message content
     created_at = db.Column(db.DateTime, default=datetime.now)
+    rsa_signature = db.Column(db.String, nullable=False)
+    dsa_signature = db.Column(db.String, nullable=False)
 
     def __repr__(self):
         return f"<Message {self.id} in Session {self.session_id} from User {self.sender_id}>"
@@ -86,13 +90,13 @@ def database_to_html(db) -> str:
     # Users Table
     html += "<h2>Users</h2><table border='1'><tr><th>ID</th><th>Username</th><th>Is Online</th><th>Created At</th><th>RSA Public Key</th><th>DSA Public Key</th></tr>"
     for user in User.query.all():
-        html += f"<tr><td>{user.id}</td><td>{user.username}</td><td>{user.is_online}</td><td>{user.created_at}</td><td>{user.public_key_rsa}</td><td>{user.public_key_dsa}</td></tr>"
+        html += f"<tr><td>{user.id}</td><td>{user.username}</td><td>{user.is_online}</td><td>{user.created_at}</td></tr>"
     html += "</table>"
 
     # Chat Sessions Table
     html += "<h2>Chat Sessions</h2><table border='1'><tr><th>ID</th><th>Name</th><th>Owner ID</th><th>Created At</th><th>Encrypted Symmetric Key</th></tr>"
     for session in ChatSession.query.all():
-        html += f"<tr><td>{session.id}</td><td>{session.name}</td><td>{session.owner_id}</td><td>{session.created_at}</td><td>{session.encrypted_symmetric_key}</td></tr>"
+        html += f"<tr><td>{session.id}</td><td>{session.name}</td><td>{session.owner_id}</td><td>{session.created_at}</td></tr>"
     html += "</table>"
 
     # Chat Participants Table
@@ -189,8 +193,8 @@ def db_get_chat_session_users(session_id: int) -> list:
     return users
 
 # Creates a new message in the given chat session
-def db_create_message(session_id: int, sender_id: int, content: str) -> Message:
-    message = Message(session_id=session_id, sender_id=sender_id, content=content)
+def db_create_message(session_id: int, sender_id: int, content: str, rsa: str, dsa: str) -> Message:
+    message = Message(session_id=session_id, sender_id=sender_id, content=content, rsa_signature=rsa, dsa_signature=dsa)
     db.session.add(message)
     db.session.commit()
     return message
@@ -198,7 +202,6 @@ def db_create_message(session_id: int, sender_id: int, content: str) -> Message:
 # Returns all messages in the given chat session, sorted by creation time
 def db_get_messages(session_id: int) -> list:
     messages = Message.query.filter_by(session_id=session_id).order_by(Message.created_at).all()
-    click.echo(f'Messages for session {session_id}: {messages}')
     return messages
 
 # Returns all chat sessions the given user is a part of

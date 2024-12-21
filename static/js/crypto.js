@@ -1,9 +1,4 @@
-// Purpose: Generate RSA and DSA key pairs using SubtleCrypto's generateKey method
-// ECDSA is like DSA but with elliptic curves
-// Documentation: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/generateKey
-
-// Generate RSA key pair and return obj with public and private keys
-// Public key is in SPKI format and private key is in PKCS#8 format
+// Using Web Crypto API to generate RSA and DSA key pairs, encrypt and decrypt messages, and sign and verify signatures
 async function generateRSAKeyPair() {
     try {
         const keyPair = await window.crypto.subtle.generateKey(
@@ -192,5 +187,145 @@ async function encryptMessage(message, session_key) {
     } catch (error) {
         console.error('Error encrypting message:', error);
         throw error;
+    }
+}
+
+// Sign a message with DSA
+async function signMessageDSA(message, dsaPrivateKey) {
+    try {
+        const privateKey = await window.crypto.subtle.importKey(
+            "pkcs8",
+            base64ToArrayBuffer(dsaPrivateKey),
+            {
+                name: "ECDSA",
+                namedCurve: "P-384"
+            },
+            true,
+            ["sign"]
+        );
+
+        const encodedMessage = new TextEncoder().encode(message);
+        const signature = await window.crypto.subtle.sign(
+            {
+                name: "ECDSA",
+                hash: {name: "SHA-384"}
+            },
+            privateKey,
+            encodedMessage
+        );
+
+        return arrayBufferToBase64(signature);
+    } catch (error) {
+        console.error('Error signing message:', error);
+        throw error;
+    }
+}
+
+// Sign a message with RSA
+async function signMessageRSA(message, rsaPrivateKey) {
+    try {
+        const privateKey = await window.crypto.subtle.importKey(
+            "pkcs8",
+            base64ToArrayBuffer(rsaPrivateKey),
+            {
+                name: "RSA-PSS",
+                hash: "SHA-256"
+            },
+            true,
+            ["sign"]
+        );
+
+        const encodedMessage = new TextEncoder().encode(message);
+        const signature = await window.crypto.subtle.sign(
+            {
+                name: "RSA-PSS",
+                saltLength: 32
+            },
+            privateKey,
+            encodedMessage
+        );
+
+        return arrayBufferToBase64(signature);
+    } catch (error) {
+        console.error('Error signing message:', error);
+        throw error;
+    }
+}
+
+// Verify a DSA signature
+async function verifySignatureDSA(message, signature, publicKey) {
+    try {
+        const key = await window.crypto.subtle.importKey(
+            "spki",
+            base64ToArrayBuffer(publicKey),
+            {
+                name: "ECDSA",
+                namedCurve: "P-384"
+            },
+            true,
+            ["verify"]
+        );
+
+        const encodedMessage = new TextEncoder().encode(message);
+        const signatureBuffer = base64ToArrayBuffer(signature);
+        const result = await window.crypto.subtle.verify(
+            {
+                name: "ECDSA",
+                hash: {name: "SHA-384"}
+            },
+            key,
+            signatureBuffer,
+            encodedMessage
+        );
+
+        console.log('DSA signature verified: ', result);
+        return result;
+    } catch (error) {
+        console.error('Error verifying signature:', error);
+        throw error;
+    }
+}
+
+// Verify an RSA signature
+async function verifySignatureRSA(message, signature, publicKey) {
+    try {
+        const key = await window.crypto.subtle.importKey(
+            "spki",
+            base64ToArrayBuffer(publicKey),
+            {
+                name: "RSA-PSS",
+                hash: "SHA-256"
+            },
+            true,
+            ["verify"]
+        );
+
+        const encodedMessage = new TextEncoder().encode(message);
+        const signatureBuffer = base64ToArrayBuffer(signature);
+        const result = await window.crypto.subtle.verify(
+            {
+                name: "RSA-PSS",
+                saltLength: 32
+            },
+            key,
+            signatureBuffer,
+            encodedMessage
+        );
+        console.log('RSA signature verified: ', result);
+        return result;
+    } catch (error) {
+        console.error('Error verifying signature:', error);
+        throw error;
+    }
+}
+
+// Verify a signature using either RSA or DSA
+async function verifySignature(signatureType, message, signature, publicKey) {
+    if (signatureType === 'RSA') {
+        return await verifySignatureRSA(message, signature.RSA, publicKey.RSA);
+    } else if (signatureType === 'DSA') {
+        return await verifySignatureDSA(message, signature.DSA, publicKey.DSA);
+    } else {
+        throw new Error('Invalid signature type');
     }
 }

@@ -8,10 +8,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatRoomsList = document.getElementById('chat-rooms');
     const currentRoomHeader = document.getElementById('current-room');
     const usernameInput = document.getElementById('username-input');
+    const logoutButton = document.getElementById('logout-button');
+    const leaveChatButton = document.getElementById('leave-chat-button');
+    const toggleSwitch = document.getElementById('toggle-switch');
 
     // Private keys
     const rsaPrivateKey = localStorage.getItem('rsaPrivateKey');
     const dsaPrivateKey = localStorage.getItem('dsaPrivateKey');
+    const rsaPublicKey = localStorage.getItem('rsaPublicKey');
+    const dsaPublicKey = localStorage.getItem('dsaPublicKey');
 
     // Global variables
     let current_room = null;
@@ -20,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let messages = []; // List of messages in the current chat room
     let participants = []; // List of participants in the current chat room
     let session_key = null; // Decrypted session key for the current chat room (AES)
+    let signatureType = "RSA"; // Default signature algorithm
 
     // Run once
     function runOnce() {
@@ -88,11 +94,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update the messages list
     function updateMessagesList(messages) {
         function addMessage(message, session_key) {
+            // Decrypt the message content using the session key
             decryptMessage(message.content, session_key).then(decryptedContent => {
-                const li = document.createElement('li');
-                const username = participants.find(user => user.id === message.sender_id).username;
-                li.textContent = `${message.created_at} ${username}: ${decryptedContent}`;
-                messagesList.appendChild(li);
+                // Verify the sender's signature either RSA or DSA
+                verifySignature(signatureType, decryptedContent, message.signatures, {"RSA": rsaPublicKey, "DSA": dsaPublicKey}).then(isValid => {
+                    if (!isValid) {
+                        console.error('Invalid signature');
+                        return;
+                    }
+                    const li = document.createElement('li');
+                    const username = participants.find(user => user.id === message.sender_id).username;
+                    li.textContent = `${message.created_at} ${username}: ${decryptedContent}`;
+                    messagesList.appendChild(li);
+                    }).catch(error => {
+                        console.error('Error verifying signature:', error);
+                    });
             });
         }
 
@@ -103,22 +119,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Message input event listener
-    messageInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            const message = messageInput.value;
-            e.preventDefault();
-            if (current_room && message) {
-                // Emit the message event
-                encryptMessage(message, session_key).then(enc_msg => {
-                    socket.emit('send_message_to_room', {'user_id': current_user_id, 'message': enc_msg, 'room_id': current_room.id});
-                    console.log("Message: " + message + " sent to room: " + current_room.name);
-                    console.log("Encrypted message: " + enc_msg);
-                    messageInput.value = '';  // Clear the message input
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                const message = messageInput.value;
+                e.preventDefault();
+                if (current_room && message) {
+                    // Emit the message event
+                    signMessageRSA(message, rsaPrivateKey).then(rsa_signature => {
+                    signMessageDSA(message, dsaPrivateKey).then(dsa_signature => {
+                    encryptMessage(message, session_key).then(enc_msg => {
+                        socket.emit('send_message_to_room', {'user_id': current_user_id, 'message': enc_msg, 'room_id': current_room.id, 'rsa_signature': rsa_signature, 'dsa_signature': dsa_signature});
+                        console.log("Message: " + message + " sent to room: " + current_room.name);
+                        console.log("Encrypted message: " + enc_msg);
+                        messageInput.value = '';  // Clear the message input
+                    }).catch(error => {
+                        console.error('Error encrypting message:', error);
+                    });
                 }).catch(error => {
-                    console.error('Error encrypting message:', error);
+                    console.error('Error signing message with DSA:', error);
+                });
+                }).catch(error => {
+                    console.error('Error signing message with RSA:', error);
                 });
             }
-        }
+        };
     });
 
     // Username input event listener
@@ -142,6 +166,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         }
+    });
+
+    // Logout button event listener
+    logoutButton.onclick = () => {
+        fetch('/api/logout', {
+            method: 'POST'
+        }).then(response => {
+            if (response.ok) {
+                window.location.href = '/';
+            } else {
+                alert('Logout failed', response);
+            }
+        })
+    }
+
+    // Leave chat button event listener
+    leaveChatButton.onclick = () => {
+        if (current_room) {
+            socket.emit('remove_user_from_chat', { 'room_id': current_room.id, 'user_id': current_user_id });
+            current_room = null;
+            currentRoomHeader.textContent = 'Current Room: None';
+            messagesList.innerHTML = '';
+            userList.innerHTML = '';
+            console.log('Left the chat room');
+            socket.emit('query_user_chat_rooms');
+        }
+    };
+
+    // Toggle switch event listener for RSA/DSA digital signature
+    toggleSwitch.addEventListener('change', (event) => {
+        if (event.target.checked) {
+            // DSA digital signature
+            signatureType = "DSA";
+            console.log('Switched to DSA digital signature');
+        } else {
+            // RSA digital signature
+            signatureType = "RSA";
+            console.log('Switched to RSA digital signature');
+        }
+        // Requery the current chat room
+        socket.emit('query_chat_room', { 'room_id': current_room.id });
     });
 
     // Socket.IO events
@@ -173,6 +238,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Any time the state of the chat room changes, requery the room info
     socket.on('requery_room', data => {
+        if (!current_room) {
+            console.log('No current room to requery');
+            return;
+        }
         socket.emit('query_chat_room', {'room_id': current_room.id});
     });
 

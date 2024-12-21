@@ -5,7 +5,7 @@ Use these functions whenever the pepper or master key is changed.
 Master keys should be regularly rotated for security purposes.
 
 '''
-
+from app import app, db
 from database import db_get_all_users, db_update_public_key, db_get_all_chat_sessions, db_update_chat_session_key
 from crypto import hash_password, encrypt_AES, generate_symmetric_key
 import os
@@ -33,12 +33,7 @@ def recalculate_encrypted_symmetric_keys():
         print(f"Updated encrypted symmetric key for chat session {session.name}")
 
 def purge_database():
-    users = db_get_all_users()
-    for user in users:
-        db_update_public_key(user.id, None)
-        print(f"Purged public key for user {user.username}")
-
-    sessions = db_get_all_chat_sessions()
-    for session in sessions:
-        db_update_chat_session_key(session.id, None)
-        print(f"Purged encrypted symmetric key for chat session {session.name}")
+    with app.app_context():
+        db.drop_all()
+    
+purge_database()

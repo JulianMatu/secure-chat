@@ -35,5 +35,4 @@ def recalculate_encrypted_symmetric_keys():
 def purge_database():
     with app.app_context():
         db.drop_all()
-    
 purge_database()

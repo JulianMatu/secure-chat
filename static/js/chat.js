@@ -103,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         console.error('Invalid signature');
                         return;
                     }
+                    console.log(signatureType +' Signature is' + message.signatures[signatureType]);
                     const li = document.createElement('li');
                     const username = participants.find(user => user.id === message.sender_id).username;
                     li.textContent = `${message.created_at} ${username}: ${decryptedContent}`;
@@ -129,9 +130,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     signMessageRSA(message, rsaPrivateKey).then(rsa_signature => {
                     signMessageDSA(message, dsaPrivateKey).then(dsa_signature => {
                     encryptMessage(message, session_key).then(enc_msg => {
-                        socket.emit('send_message_to_room', {'user_id': current_user_id, 'message': enc_msg, 'room_id': current_room.id, 'rsa_signature': rsa_signature, 'dsa_signature': dsa_signature});
+                        socket.emit('send_message_to_room', {'user_id': current_user_id, 'message': enc_msg, 'room_id': current_room.id,
+                                                             'rsa_signature': rsa_signature, 'dsa_signature': dsa_signature});
                         console.log("Message: " + message + " sent to room: " + current_room.name);
                         console.log("Encrypted message: " + enc_msg);
+                        console.log("RSA Signature: " + rsa_signature);
+                        console.log("DSA Signature: " + dsa_signature);
                         messageInput.value = '';  // Clear the message input
                     }).catch(error => {
                         console.error('Error encrypting message:', error);
@@ -226,13 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         decryptSessionKey(encrypted_session_key, rsaPrivateKey).then(decrypted_session_key => {
             session_key = decrypted_session_key,
-
-            //console.log('chat room query results: ' + current_room.name + ' ' + participants + ' ' + messages + ' ' + encrypted_session_key);
-        
-            // Update the user list
             updateUserList(participants),
-
-            // Update the messages list
             updateMessagesList(messages)
         });
     });

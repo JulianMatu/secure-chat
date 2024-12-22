@@ -198,7 +198,7 @@ def handle_query_chat_room(data):
         "participants": [{"id": user.id, "username": user.username, "is_online": user.is_online, "rsa_public_key": user.public_key_rsa, "dsa_public_key": user.public_key_dsa} for user in session_users] if session_users else [],
         "messages": [{"id": msg.id, "sender_id": msg.sender_id, "created_at": str(msg.created_at.strftime('%m-%d %H:%M:%S')),\
                        "content": msg.content, "signatures": {"RSA": msg.rsa_signature, "DSA": msg.dsa_signature}} for msg in session_messages] if session_messages else [],
-        "user_encrypted_key": user_encrypted_key,
+        "   ": user_encrypted_key,
     }
     emit('res_query_chat_room', payload)
 

@@ -18,9 +18,6 @@ __pycache__/
 .idea/
 *.swp
 
-# Cursor
-.cursorrules
-
 # Environment variables
 .env
 
